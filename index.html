@@ -1,5 +1,541 @@
-
 <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Seismic Sensor & Frequency Analyzer</title>
+    <style>
+        :root {
+            --primary: #00cbc6;
+            --danger: #ff4757;
+            --warning: #ffa502;
+            --success: #2ed573;
+            --bg-dark: #121824;
+            --card-bg: #1c2434;
+            --text-light: #f5f6fa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Screen Container */
+        .screen {
+            width: 100%;
+            max-width: 550px;
+            padding: 35px 25px;
+            border-radius: 20px;
+            background: var(--card-bg);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.05);
+            display: none; /* Hidden by default */
+        }
+
+        /* Enforce active display class */
+        .screen.active {
+            display: block !important;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* UI Styling Components */
+        .exhibition-badge {
+            background: rgba(0, 203, 198, 0.15);
+            color: var(--primary);
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            letter-spacing: 1px;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        h1 { font-size: 2.1rem; margin-bottom: 15px; color: #fff; line-height: 1.3; }
+        h2 { font-size: 1.6rem; margin-bottom: 20px; color: #fff; }
+        p { color: #a4b0be; margin-bottom: 25px; line-height: 1.6; font-size: 1rem; }
+
+        .btn {
+            background-color: var(--primary);
+            color: #121824;
+            border: none;
+            padding: 14px 30px;
+            font-size: 1.05rem;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 15px rgba(0, 203, 198, 0.3);
+            display: block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #a4b0be;
+            border: 2px solid #334155;
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+
+        .instruction-card {
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: left;
+            margin-bottom: 25px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .instruction-card ul { padding-left: 20px; color: #ced6e0; }
+        .instruction-card li { margin-bottom: 10px; font-size: 0.95rem; }
+
+        /* Telemetry Indicators */
+        .pulse-box {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--success);
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+        }
+
+        .pulse-dot {
+            width: 10px; height: 10px;
+            background-color: var(--success);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.4; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.4; }
+        }
+
+        .display-value {
+            font-size: 4.5rem;
+            font-weight: 800;
+            color: #fff;
+            margin: 15px 0;
+            font-family: monospace;
+        }
+
+        .hz-unit { font-size: 1.5rem; color: #747d8c; font-weight: normal; }
+
+        .status-pill {
+            display: inline-block;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            margin-bottom: 30px;
+            background: rgba(46, 213, 115, 0.15);
+            color: var(--success);
+        }
+
+        /* Overlay Alert popups */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(10, 14, 22, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s ease;
+            padding: 20px;
+        }
+
+        .overlay.active { opacity: 1; pointer-events: auto; }
+        .alert-card { width: 100%; max-width: 420px; padding: 35px 25px; border-radius: 16px; text-align: center; }
+        .danger-alert { background: var(--danger); color: white; box-shadow: 0 20px 40px rgba(255, 71, 87, 0.3); }
+        .warning-alert { background: var(--warning); color: #121824; box-shadow: 0 20px 40px rgba(255, 165, 2, 0.3); }
+        .alert-card h3 { font-size: 2rem; margin-bottom: 12px; }
+        .alert-card p { color: inherit; margin-bottom: 25px; font-weight: 500; }
+        .alert-card .btn { background: white; color: #121824; box-shadow: none; }
+    </style>
+</head>
+<body>
+
+    <!-- SCREEN 1: WELCOME SCREEN -->
+    <div id="screenWelcome" class="screen active">
+        <span class="exhibition-badge">COLLEGE TECH EXHIBITION</span>
+        <h1>Seismic Wave & Earthquake Frequency Simulator</h1>
+        <p>Welcome to the interactive digital seismograph portal. This system measures real-time physical telemetry frequencies to detect structural hazards.</p>
+        <button class="btn" id="btnGoToSetup">Begin Tracking Process</button>
+    </div>
+
+    <!-- SCREEN 2: SETUP & CALIBRATION -->
+    <div id="screenSetup" class="screen">
+        <h2>Sensor Deployment Guide</h2>
+        <p>Please prepare the hardware environment before initializing telemetry logs:</p>
+        
+        <div class="instruction-card">
+            <ul>
+                <li>Place your smartphone flat on a level testing table or mount it securely to your experimental shaking platform.</li>
+                <li>When the process begins, introduce physical oscillations (shake the table/device) to mimic seismic disturbances.</li>
+                <li>The system will dynamically process structural frequencies.</li>
+            </ul>
+        </div>
+
+        <button class="btn" id="btnStartTelemetry">Initialize Real-Time Sensors</button>
+        <button class="btn btn-secondary" id="btnSetupBack">Back to Home</button>
+    </div>
+
+    <!-- SCREEN 3: LIVE MONITORING -->
+    <div id="screenAnalyzer" class="screen">
+        <div class="pulse-box">
+            <div class="pulse-dot" id="pulseDot"></div>
+            <span id="pulseText">SEISMIC SENSORS ENGAGED</span>
+        </div>
+        
+        <p style="margin-bottom: 5px; font-size: 0.9rem; letter-spacing: 0.5px;">STRUCTURAL TELEMETRY</p>
+        <div class="display-value">
+            <span id="lblHz">0.0</span><span class="hz-unit"> Hz</span>
+        </div>
+        
+        <div class="status-pill" id="lblStatus">Status: Nominal Environment</div>
+
+        <!-- Demonstration Slider -->
+        <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 10px; margin-bottom: 25px;">
+            <label style="font-size:0.8rem; color:#747d8c; display:block; margin-bottom:8px;">Manual Override (For Non-Mobile/Judges Demo)</label>
+            <input type="range" min="0" max="25" step="0.1" value="0" style="width:100%; accent-color:var(--primary);" id="sliderManual">
+        </div>
+
+        <button class="btn btn-secondary" id="btnEndProcess">Terminate & Summary</button>
+    </div>
+
+    <!-- SCREEN 4: CONCLUSION / EXIT SCREEN -->
+    <div id="screenExit" class="screen">
+        <div style="font-size: 4rem; margin-bottom: 20px;">🔌</div>
+        <h2>Telemetry Log Suspended</h2>
+        <p>The earthquake monitoring process has successfully ended. What action would you like to perform next?</p>
+        
+        <button class="btn" id="btnRestartProcess">Run Simulation Again</button>
+        <button class="btn btn-secondary" id="btnReturnHome">Return to Home Screen</button>
+    </div>
+
+    <!-- DANGER POP-UP MODAL OVERLAY -->
+    <div id="popupDanger" class="overlay">
+        <div class="alert-card danger-alert">
+            <h3>⚠️ CRITICAL ALERT</h3>
+            <p><strong>HIGH HAZARD FREQUENCY DETECTED!</strong><br>Severe ground acceleration thresholds breached. This frequency matches signature destructive earthquake patterns.</p>
+            <button class="btn" id="btnCloseDanger">Acknowledge & Clear Alert</button>
+        </div>
+    </div>
+
+    <!-- WARNING/MINOR MOTION POP-UP MODAL OVERLAY -->
+    <div id="popupWarning" class="overlay">
+        <div class="alert-card warning-alert">
+            <h3>📉 MINOR SHIFT</h3>
+            <p><strong>LOW FREQUENCY OSCILLATION DETECTED.</strong><br>Minor baseline shifts recorded. There is no immediate structural threat or hazard risks, but frequency logging is active.</p>
+            <button class="btn" id="btnCloseWarning">Acknowledge & Continue</button>
+        </div>
+    </div>
+
+    <script>
+        // Target Navigation Engine - Fixed & Guaranteed to run smoothly
+        function showScreen(screenId) {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Seismic Sensor & Frequency Analyzer</title>
+    <style>
+        :root {
+            --primary: #00cbc6;
+            --danger: #ff4757;
+            --warning: #ffa502;
+            --success: #2ed573;
+            --bg-dark: #121824;
+            --card-bg: #1c2434;
+            --text-light: #f5f6fa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Screen Container */
+        .screen {
+            width: 100%;
+            max-width: 550px;
+            padding: 35px 25px;
+            border-radius: 20px;
+            background: var(--card-bg);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.05);
+            display: none; /* Hidden by default */
+        }
+
+        /* Enforce active display class */
+        .screen.active {
+            display: block !important;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* UI Styling Components */
+        .exhibition-badge {
+            background: rgba(0, 203, 198, 0.15);
+            color: var(--primary);
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            letter-spacing: 1px;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        h1 { font-size: 2.1rem; margin-bottom: 15px; color: #fff; line-height: 1.3; }
+        h2 { font-size: 1.6rem; margin-bottom: 20px; color: #fff; }
+        p { color: #a4b0be; margin-bottom: 25px; line-height: 1.6; font-size: 1rem; }
+
+        .btn {
+            background-color: var(--primary);
+            color: #121824;
+            border: none;
+            padding: 14px 30px;
+            font-size: 1.05rem;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 15px rgba(0, 203, 198, 0.3);
+            display: block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #a4b0be;
+            border: 2px solid #334155;
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+
+        .instruction-card {
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: left;
+            margin-bottom: 25px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .instruction-card ul { padding-left: 20px; color: #ced6e0; }
+        .instruction-card li { margin-bottom: 10px; font-size: 0.95rem; }
+
+        /* Telemetry Indicators */
+        .pulse-box {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--success);
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+        }
+
+        .pulse-dot {
+            width: 10px; height: 10px;
+            background-color: var(--success);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.4; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.4; }
+        }
+
+        .display-value {
+            font-size: 4.5rem;
+            font-weight: 800;
+            color: #fff;
+            margin: 15px 0;
+            font-family: monospace;
+        }
+
+        .hz-unit { font-size: 1.5rem; color: #747d8c; font-weight: normal; }
+
+        .status-pill {
+            display: inline-block;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            margin-bottom: 30px;
+            background: rgba(46, 213, 115, 0.15);
+            color: var(--success);
+        }
+
+        /* Overlay Alert popups */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(10, 14, 22, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s ease;
+            padding: 20px;
+        }
+
+        .overlay.active { opacity: 1; pointer-events: auto; }
+        .alert-card { width: 100%; max-width: 420px; padding: 35px 25px; border-radius: 16px; text-align: center; }
+        .danger-alert { background: var(--danger); color: white; box-shadow: 0 20px 40px rgba(255, 71, 87, 0.3); }
+        .warning-alert { background: var(--warning); color: #121824; box-shadow: 0 20px 40px rgba(255, 165, 2, 0.3); }
+        .alert-card h3 { font-size: 2rem; margin-bottom: 12px; }
+        .alert-card p { color: inherit; margin-bottom: 25px; font-weight: 500; }
+        .alert-card .btn { background: white; color: #121824; box-shadow: none; }
+    </style>
+</head>
+<body>
+
+    <!-- SCREEN 1: WELCOME SCREEN -->
+    <div id="screenWelcome" class="screen active">
+        <span class="exhibition-badge">COLLEGE TECH EXHIBITION</span>
+        <h1>Seismic Wave & Earthquake Frequency Simulator</h1>
+        <p>Welcome to the interactive digital seismograph portal. This system measures real-time physical telemetry frequencies to detect structural hazards.</p>
+        <button class="btn" id="btnGoToSetup">Begin Tracking Process</button>
+    </div>
+
+    <!-- SCREEN 2: SETUP & CALIBRATION -->
+    <div id="screenSetup" class="screen">
+        <h2>Sensor Deployment Guide</h2>
+        <p>Please prepare the hardware environment before initializing telemetry logs:</p>
+        
+        <div class="instruction-card">
+            <ul>
+                <li>Place your smartphone flat on a level testing table or mount it securely to your experimental shaking platform.</li>
+                <li>When the process begins, introduce physical oscillations (shake the table/device) to mimic seismic disturbances.</li>
+                <li>The system will dynamically process structural frequencies.</li>
+            </ul>
+        </div>
+
+        <button class="btn" id="btnStartTelemetry">Initialize Real-Time Sensors</button>
+        <button class="btn btn-secondary" id="btnSetupBack">Back to Home</button>
+    </div>
+
+    <!-- SCREEN 3: LIVE MONITORING -->
+    <div id="screenAnalyzer" class="screen">
+        <div class="pulse-box">
+            <div class="pulse-dot" id="pulseDot"></div>
+            <span id="pulseText">SEISMIC SENSORS ENGAGED</span>
+        </div>
+        
+        <p style="margin-bottom: 5px; font-size: 0.9rem; letter-spacing: 0.5px;">STRUCTURAL TELEMETRY</p>
+        <div class="display-value">
+            <span id="lblHz">0.0</span><span class="hz-unit"> Hz</span>
+        </div>
+        
+        <div class="status-pill" id="lblStatus">Status: Nominal Environment</div>
+
+        <!-- Demonstration Slider -->
+        <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 10px; margin-bottom: 25px;">
+            <label style="font-size:0.8rem; color:#747d8c; display:block; margin-bottom:8px;">Manual Override (For Non-Mobile/Judges Demo)</label>
+            <input type="range" min="0" max="25" step="0.1" value="0" style="width:100%; accent-color:var(--primary);" id="sliderManual">
+        </div>
+
+        <button class="btn btn-secondary" id="btnEndProcess">Terminate & Summary</button>
+    </div>
+
+    <!-- SCREEN 4: CONCLUSION / EXIT SCREEN -->
+    <div id="screenExit" class="screen">
+        <div style="font-size: 4rem; margin-bottom: 20px;">🔌</div>
+        <h2>Telemetry Log Suspended</h2>
+        <p>The earthquake monitoring process has successfully ended. What action would you like to perform next?</p>
+        
+        <button class="btn" id="btnRestartProcess">Run Simulation Again</button>
+        <button class="btn btn-secondary" id="btnReturnHome">Return to Home Screen</button>
+    </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIY Seismograph Exhibition</title>
+    <!-- Chart.js for smooth live graphing -->
+    <script src="https://jsdelivr.net"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            text-align: center;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { color: #ff4757; margin-bottom: 5px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        #chart-container { background: #1e1e1e; padding: 10px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        button {
+            background-color: #ff4757; color: white; border: none; padding: 15px 30px;
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -286,4 +822,4 @@
     <!-- WARNING/MINOR MOTION POP-UP MODAL OVERLAY -->
     <div id="popupWarning" class="overlay">
         <div class="alert-card warning-alert">
-  
+            
