@@ -1,1 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIY Seismograph Exhibition</title>
+    <!-- Chart.js for smooth live graphing -->
+    <script src="https://jsdelivr.net"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            text-align: center;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { color: #ff4757; margin-bottom: 5px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        #chart-container { background: #1e1e1e; padding: 10px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        button {
+            background-color: #ff4757; color: white; border: none; padding: 15px 30px;
+            font-size: 16px; font-weight: bold; border-radius: 25px; cursor: pointer;
+            margin: 20px 0; transition: 0.2s;
+        }
+        button:active { transform: scale(0.95); }
+        .status { color: #ffa502; font-weight: bold; }
+    </style>
+</head>
+<body>
 
+<div class="container">
+    <h1>🔬 DIY Seismograph</h1>
+    <p>Place the phone flat on the table and shake the table to simulate an earthquake!</p>
+    
+    <!-- iOS requires user permission to access motion sensors -->
+    <button id="startBtn">Start Sensor</button>
+    <p class="status" id="statusText">Sensor: Off</p>
+
+    <div id="chart-container">
+        <canvas id="seismoChart"></canvas>
+    </div>
+</div>
+
+<script>
+    const ctx = document.getElementById('seismoChart').getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const statusText = document.getElementById('statusText');
+    
+    // Setup Chart with maximum 50 data points for performance
+    const maxDataPoints = 50;
+    const chartData = {
+        labels: Array(maxDataPoints).fill(''),
+        datasets: [{
+            label: 'Seismic Magnitude (Acceleration Force)',
+            data: Array(maxDataPoints).fill(0),
+            borderColor: '#ff4757',
+            borderWidth: 2,
+            pointRadius: 0, // Smooth line without dots
+            fill: false,
+            tension: 0.4
+        }]
+    };
+
+    const config = {
+        type: 'line',
+        data: chartData,
+        options: {
+            responsive: true,
+            scales: {
+                y: { min: 0, max: 20, grid: { color: '#333' }, ticks: { color: '#aaa' } },
+                x: { display: false }
+            },
+            plugins: { legend: { labels: { color: '#fff' } } }
+        }
+    };
+
+    const seismoChart = new Chart(ctx, config);
+
+    // Function to start listening to the device motion
+    function initSensors() {
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+            // iOS 13+ devices require explicit permission
+            DeviceMotionEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        startListening();
+                    } else {
+                        statusText.innerText = "Permission Denied!";
+                    }
+                })
+                .catch(console.error);
+        } else {
+            // Android and older browsers
+            startListening();
+        }
+    }
+
+    function startListening() {
+        window.addEventListener('devicemotion', (event) => {
+            // Get acceleration excluding gravity forces
+            let acc = event.acceleration;
+            if (!acc || acc.x === null) {
+                // Fallback to acceleration including gravity if standard is unavailable
+                acc = event.accelerationIncludingGravity;
+            }
+
+            if (acc && acc.x !== null) {
+                statusText.innerText = "🚨 Live Monitoring Active...";
+                statusText.style.color = "#2ed573";
+                startBtn.style.display = "none";
+
+                // Calculate the net magnitude vector of the shake (3D Pythagorean theorem)
+                // Subtracting roughly 9.8 if including gravity to baseline it around 0
+                let magnitude = Math.sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
+                
+                // If using gravity fallback, balance the baseline
+                if (event.accelerationIncludingGravity && !event.acceleration.x) {
+                    magnitude = Math.abs(magnitude - 9.8);
+                }
+
+                // Push new data and shift old data out
+                chartData.datasets[0].data.push(magnitude);
+                chartData.datasets[0].data.shift();
+                seismoChart.update('none'); // Update without animation lag
+            }
+        });
+    }
+
+    startBtn.addEventListener('click', initSensors);
+</script>
+
+</body>
+  </html>
+  
